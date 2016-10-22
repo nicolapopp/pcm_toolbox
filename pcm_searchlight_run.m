@@ -40,13 +40,15 @@ function varargout = pcm_searchlight_run(Searchlights,ImagesIn,ImagesOut,pcmfcn,
 verbose     = 0;       % Control output to commandline 
 tmpDir      = {};      % Directory for tmp*.mat files (for each subject) 
 columnNames = {};
-vararginoptions(varargin,{'tmpDir','verbose','columnNames'});
+Nout        = [];
+vararginoptions(varargin,{'tmpDir','verbose','columnNames','Nout'});
 
 %-------------------------------------------------------------------------%
 % Checnk input
 %-------------------------------------------------------------------------%
 % Number of subjects
-sn = numel(Searchlights);
+sn          = numel(Searchlights);
+subjects    = 1:sn;
 if sn~=numel(ImagesIn);
     error('Size mismatch between Searchlight and ImagesIn!\n');
 end
@@ -56,19 +58,21 @@ end
 if iscell(Searchlights)
     SLnames = Searchlights;
     clear Searchlights
-    for s=1:sn
+    for s=subjects
         Searchlights(s) = load(SLnames{s});
     end
 end
 Nnode1      = numel(Searchlights(1).LI); % assuming the same node size across sbjs
 NsubjNode   = zeros(Nnode1,1);
-for s=1:sn    
+for s=subjects   
     Searchlights(s).Good = ~isnan(Searchlights(s).vORr); % non-empty node
     NsubjNode = NsubjNode + double(Searchlights(s).Good);
 end
+NsubjNodeAll = cat(2,Searchlights.Good);
+
 % Get node id
 if ~isfield(Searchlights(1),'nodeID');
-    for s=1:sn
+    for s=subjects
         Searchlights(s).nodeID      = [1:Nnode1]';
         Searchlights(s).num_nodes   = Nnode1;
     end
@@ -77,11 +81,11 @@ end
 %-------------------------------------------------------------------------%
 % Check output
 %-------------------------------------------------------------------------%
-Nout = numel(ImagesOut);
+Nimage = numel(ImagesOut);
 if (~isempty(ImagesOut))&&(~iscell(ImagesOut))
     error('outfiles must be given in a cell array.'); 
 end;
-for i=1:Nout
+for i=1:Nimage
     [d f t m]       = spm_fileparts(ImagesOut{i}(1,:));
     metricNames{i}  = fullfile(d, [f t]);
     metricColumn{i} = m(2:end);
@@ -90,12 +94,15 @@ for i=1:Nout
     end;
 end
 %=== currently only allow .metric file type for output?
-% Check output size
-for s=1:sn
+% Check output size with small sample
+if isempty(Nout)
+for s=subjects(1:2) % use only two subjects
     X{s} = rand(length(ImagesIn{1}),10);
 end
-Result  = feval(pcmfcn,X,params{:});
-Ncol    = size(Result,2);
+params_ = local_pickParameters(params,sn,[1,2]);
+Result  = feval(pcmfcn,X,params_{:});
+Nout    = size(Result,2);
+end
 
 if isempty(tmpDir)
    % get directory from Searchlight 
@@ -113,6 +120,7 @@ end
 %-------------------------------------------------------------------------% 
 % Read volumes into memory space 
 % (this is memory-consuming. Any smarter way?)
+Vol = cell(sn,1);
 for s=1:sn
     Vol{s} = spm_vol(ImagesIn{s});
 end
@@ -121,8 +129,8 @@ end
 % loop over searchlight center nodes (this loop can be parallelized)
 nodeID          = Searchlights(1).nodeID;
 num_nodes       = Searchlights(1).num_nodes;
-Result          = zeros(sn,Ncol,num_nodes)*NaN; % initialize data container
-alpha           = 1.0;
+Result          = zeros(sn,Nout,num_nodes)*NaN; % initialize data container
+alpha           = 0.8;
 CandidateNodes  = find(NsubjNode>=alpha*sn); % define candidate center nodes
 Ncandidate      = length(CandidateNodes);
 blocksize       = 1; % this needs to be adaptive
@@ -147,7 +155,7 @@ for i=1:Nblock;
     X = cell(sn,1); % initialize X
     for s=1:sn % can be parfor?
         LI = Searchlights(s).LI(candidates);
-        if ~isempty(LI)
+        if numel(LI{:})>0
             % Sample images (time series data) for LI{i_centernode}
             linVox    = unique(cat(2,LI{:})); % unique voxel linear indices
             [I,J,K]   = ind2sub(Vol{s}(1).dim,linVox);
@@ -163,14 +171,16 @@ for i=1:Nblock;
     % run pcm for each candidate center node one by one
     for b=1:blocksize
         Nsubj   = NsubjNode(candidates(b));
+        subjidx = NsubjNodeAll(candidates(b),:);
+        paramsB = local_pickParameters(params,sn,subjidx); % pull params for existing subjects
         Y       = cell(Nsubj,1);
         c       = 1;
-        for s=1:sn
+        for s=subjects(subjidx)
             LI = Searchlights(s).LI(candidates(b));
             Y{c} = full(X{s}(:,LI{:}));
             c = c+1;
-        end        
-        Result(:,:,nodeID(candidates(b))) = feval(pcmfcn,Y,params{:});
+        end
+        Result(subjidx,:,nodeID(candidates(b))) = feval(pcmfcn,Y,paramsB{:});
     end;toc
     
 end
@@ -238,6 +248,31 @@ b=1;
 %     b = b+1;
 % end
 % numBlocks = b-1;
+end
+
+%-------------------------------------------------------------------------% 
+% Re-organize option inputs (params) according to subjects exist on the
+% node
+%-------------------------------------------------------------------------% 
+function paramsOut = local_pickParameters(paramsIn,Nsubj,subjidx)
+    paramsOut = cell(size(paramsIn));
+    for p=1:numel(paramsIn)
+        % if size of the option param equals to the number of subject,
+        % assume that is set for each subject
+        if (numel(paramsIn{p})==Nsubj);
+            if p>1&&ischar(paramsIn{p-1}) % to not change model-related inputs
+                if strfind(lower(paramsIn{p-1}),'model');
+                    paramsOut{p} = paramsIn{p};
+                else
+                    paramsOut{p} = paramsIn{p}(subjidx);
+                end
+            else
+                paramsOut{p} = paramsIn{p}(subjidx); % this works either to cell array, structure arry, or double
+            end
+        else
+            paramsOut{p} = paramsIn{p};
+        end        
+    end
 end
 
 %-------------------------------------------------------------------------%
