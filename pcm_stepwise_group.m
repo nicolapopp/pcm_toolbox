@@ -33,8 +33,12 @@ function [T,M,C,history,Tall] = pcm_stepwise_group(Y,Models,conditionVec,partiti
 %   Partition:  vector of membership for session
 %
 % Optional inputs:
-%
-%
+%   'runEffect'     : How to deal with fixed-effect. Choose from 'random', 'fixed' and 'remove'.
+%   'Z'             : If you need to pass specific second-level design 
+%   'verbose'       : If set to 0, inhibit any commandline output
+%   'fig'           : Show maximum log-Bayesfactor at every step
+%   'selection'     : 'forward', 'backward', 'forwardthorough', 'backwardthorough'
+% 
 % Output:
 %
 %
@@ -46,8 +50,8 @@ runEffect   = 'remove';    % run effect
 Z           = [];   % if specific shape of Z is needed
 verbose     = 0;    % show command output
 fig         = 0;    % show history of Bayes factor
-selection   = 'forward'; % 'backward'
-vararginoptions(varargin,{'verbose','runEffect','Z','fig'});
+selection   = 'forward'; % 'backward' % 'forwardthorough' % 'backwardthorough'
+vararginoptions(varargin,{'verbose','runEffect','Z','fig','selection'});
 
 %-----------------------------------------------------------------%
 %-- Noise ceiling model
@@ -60,7 +64,8 @@ Ceiling.type        = 'noiseceiling';
 
 
 %-----------------------------------------------------------------%
-% Get noise ceiling first
+% Get noise ceiling first (should be separated from Model (otherwise
+%  you would get ceiling model included in the stepwise process)
 %-----------------------------------------------------------------%
 switch (runEffect)
     case 'remove'
@@ -78,7 +83,7 @@ end
 %-----------------------------------------------------------------%
 
 switch (selection)
-    case 'forward'
+    case {'forward','forwardthorough'}
         %-----------------------------------------------------------------%
         % Start forward selection
         %-----------------------------------------------------------------%
@@ -95,7 +100,7 @@ switch (selection)
         end
         
         % loop start here
-        maxIter = 2^(length(Models)-1);
+        maxIter = length(Models);
         %-----------------------------------------------------------------%
         % Iterate pcm model fitting until converge
         for iter = 1:maxIter
@@ -149,18 +154,26 @@ switch (selection)
             % If 2*log-Baysfactor of current best model
             %  - vs. the previous best model
             % is smaller than 2, fit full-model and end selection.
-            if (dMaxLogBF<2&&iter>1)
+            evalLogBF = dMaxLogBF;
+            if strcmp(selection,'forwardthorough');
+                if verbose; 
+                    disp('selection type: ''forwardthorough''');
+                    disp(' keep incleasing model terms...');
+                    evalLogBF = 10; % force logBF for evaluation to be >2
+                end;
+            end
+            if (evalLogBF<2&&iter>1)
                 if isFinish==0
                     bestiter = iter-1;
                 end
                 isFinish = 1;
-                fprintf('Stop criteria satisfied (no further improvement in Bayes factor).\n');
+                if verbose;fprintf('Stop criteria satisfied (no further improvement in Bayes factor).\n');end;
                 
                 if isempty(unusedmodel)
-                    fprintf('Finish estimation.\n');
+                    if verbose;fprintf('Finish estimation.\n');end;
                     break;
                 else
-                    fprintf('Going to full-model...\n');
+                    if verbose;fprintf('Going to full-model...\n');end;
                     
                     modeluse{iter+1}{1} = [1:numel(Models)];
                     Nmodel = numel(modeluse{iter+1}); M = [];
@@ -179,7 +192,7 @@ switch (selection)
                     bestiter = iter;
                 end
                 if isempty(unusedmodel) % if full-model is already done, stop here
-                    fprintf('Stop criteria satisfied (reached to full-model).\n');
+                    if verbose;fprintf('Stop criteria satisfied (reached to full-model).\n');end;
                     break;
                 end
                 
@@ -197,7 +210,7 @@ switch (selection)
             
             % end of loop here
         end
-    case 'backward'
+    case {'backward','backwardthorough'}
         error('Not implemented.');
 end
 
