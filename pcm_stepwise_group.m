@@ -158,6 +158,7 @@ switch (selection)
             % is smaller than 2, fit full-model and end selection.
             evalLogBF = dMaxLogBF;
             if strcmp(selection,'forwardthorough');
+<<<<<<< fde62bd48bbbdeefa25999265bbe7d0c2fe51124
 <<<<<<< 7a7f672964b63f3dad24fa891c75d192cd242171
                 evalLogBF = 10; % force logBF for evaluation to be >2
                 if verbose; 
@@ -169,6 +170,12 @@ switch (selection)
                     disp(' keep incleasing model terms...');
                     evalLogBF = 10; % force logBF for evaluation to be >2
 >>>>>>> update to pcm_stepwise_group
+=======
+                evalLogBF = 10; % force logBF for evaluation to be >2
+                if verbose; 
+                    disp('selection type: ''forwardthorough''');
+                    disp(' keep incleasing model terms...');                    
+>>>>>>> fixed one bug; 'forwardthorough' option should now works as intended
                 end;
             end
             if (evalLogBF<2&&iter>1)
