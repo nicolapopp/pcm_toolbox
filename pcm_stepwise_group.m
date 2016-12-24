@@ -156,10 +156,10 @@ switch (selection)
             % is smaller than 2, fit full-model and end selection.
             evalLogBF = dMaxLogBF;
             if strcmp(selection,'forwardthorough');
+                evalLogBF = 10; % force logBF for evaluation to be >2
                 if verbose; 
                     disp('selection type: ''forwardthorough''');
-                    disp(' keep incleasing model terms...');
-                    evalLogBF = 10; % force logBF for evaluation to be >2
+                    disp(' keep incleasing model terms...');                    
                 end;
             end
             if (evalLogBF<2&&iter>1)
