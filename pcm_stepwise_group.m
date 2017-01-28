@@ -96,7 +96,9 @@ switch (selection)
             M(i).modelpred  = @(x)(pcm_combineModels(x,Models(modeluse{iter}{i})));
             M(i).numGparams = sum(cat(2,Models(modeluse{iter}{i}).numGparams));
             M(i).x0         = cat(2,Models(modeluse{iter}{i}).theta0)';
+            M(i).theta0     = M(i).x0;
             M(i).name       = sprintf('%s.',Models(modeluse{iter}{i}).name);
+            M(i).type       = 'nonlinear';
         end
         
         % loop start here
@@ -204,7 +206,9 @@ switch (selection)
                     M(i).modelpred  = @(x)(sh2.pcm_modelpred(x,Models(modeluse{iter+1}{i})));
                     M(i).numGparams = sum(cat(2,Models(modeluse{iter+1}{i}).numGparams));
                     M(i).x0         = cat(2,Models(modeluse{iter+1}{i}).theta0)';
+                    M(i).theta0     = M(i).x0;
                     M(i).name       = sprintf('%s.',Models(modeluse{iter+1}{i}).name);
+                    M(i).type       = 'nonlinear';
                 end
             end
             
