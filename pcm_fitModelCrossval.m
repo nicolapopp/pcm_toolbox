@@ -91,7 +91,8 @@ runEffect       = 'random';
 isCheckDeriv    = 0;
 MaxIteration    = 1000;
 verbose         = 1;
-pcm_vararginoptions(varargin,{'runEffect','isCheckDeriv','MaxIteration','verbose'});
+Z               = [];
+pcm_vararginoptions(varargin,{'runEffect','isCheckDeriv','MaxIteration','verbose','Z'});
 
 numSubj     = numel(Y);
 numModels   = numel(M);
@@ -106,7 +107,9 @@ for s = 1:numSubj
     
     % Set up the main matrices
     [N(s,1),P(s,1)] = size(Y{s});
-    Z{s}   = pcm_indicatorMatrix('identity_p',conditionVec{s});
+    if numel(Z)<numSubj
+        Z{s}   = pcm_indicatorMatrix('identity_p',conditionVec{s});
+    end
     numCond= size(Z{s},2);
     
     % Depending on the way of dealing with the run effect, set up data
